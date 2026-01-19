@@ -1,0 +1,5 @@
+{
+  "name": "Nutanix Cluster Manager",
+  "description": "A dashboard to manage Nutanix clusters, verify connectivity, explore resources (VM, Hardware, License, Performance), and export data to CSV.",
+  "requestFramePermissions": []
+}
