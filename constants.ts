@@ -5,6 +5,7 @@ export const CATEGORIES: Category[] = ['VM', 'Hardware', 'Performance', 'Resourc
 export const FIELD_DEFINITIONS: Record<Category, { key: string; label: string }[]> = {
   VM: [
     { key: 'clusterName', label: 'Cluster Name' },
+    { key: 'hostName', label: 'Host Name' },
     { key: 'name', label: 'VM Name' },
     { key: 'uuid', label: 'UUID' },
     { key: 'powerState', label: 'Power State' },
@@ -12,7 +13,7 @@ export const FIELD_DEFINITIONS: Record<Category, { key: string; label: string }[
     { key: 'ipAddresses', label: 'IP Addresses' },
     { key: 'vDisk', label: 'vDisk' },
     { key: 'numVcpus', label: 'vCPUs' },
-    { key: 'memoryMb', label: 'Memory (MB)' },
+    { key: 'memoryGib', label: 'Memory (GiB)' },
   ],
   Hardware: [
     { key: 'hostName', label: 'Host Name' },
@@ -46,7 +47,7 @@ export const FIELD_DEFINITIONS: Record<Category, { key: string; label: string }[
 };
 
 export const DEFAULT_FIELDS: Record<Category, string[]> = {
-  VM: ['clusterName', 'name', 'powerState'],
+  VM: ['clusterName', 'hostName', 'name', 'powerState', 'numVcpus', 'memoryGib'],
   Hardware: ['hostName', 'serial', 'model', 'cpuModel','numCores','memoryCapacity','disk'],
   Performance: ['entityName', 'iops', 'bandwidth', 'latency', 'cpuUsage', 'memoryUsage'],
   Resources: ['hostName', 'vmCount', 'numaOver', 'metric1', 'metric2', 'metric3', 'metric4', 'result'],

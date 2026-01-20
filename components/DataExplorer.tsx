@@ -25,6 +25,12 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
   // Resources 전용 상태
   const [ratio, setRatio] = useState<number>(3);
   const [rf, setRf] = useState<number>(2);
+  const [cvmVcore, setCvmVcore] = useState<number>(0);
+  const [cvmMemory, setCvmMemory] = useState<number>(0);
+  
+  // 정렬 상태
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Reset selection when category changes
   useEffect(() => {
@@ -52,7 +58,7 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
     }
   }, [category]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (ignoreCache: boolean = false) => {
     // Performance 카테고리인데 시간이 설정되지 않았으면 로드하지 않음
     if (category === 'Performance' && (!startTime || !endTime)) {
       return;
@@ -71,7 +77,10 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
         interval, 
         aggregationType,
         ratio,
-        rf 
+        rf,
+        cvmVcore,
+        cvmMemory,
+        ignoreCache
       });
       setData(result);
     } catch (err) {
@@ -80,7 +89,7 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
     } finally {
       setLoading(false);
     }
-  }, [cluster, category, startTime, endTime, interval, aggregationType, ratio, rf]);
+  }, [cluster, category, startTime, endTime, interval, aggregationType, ratio, rf, cvmVcore, cvmMemory]);
 
   // Load data immediately when category changes or when component mounts with a valid cluster
   useEffect(() => {
@@ -97,6 +106,47 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
         : [...prev, key]
     );
   };
+  
+  // 정렬 핸들러
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      // 같은 필드를 클릭하면 방향 전환
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      // 다른 필드를 클릭하면 해당 필드로 오름차순 정렬
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+  
+  // 정렬된 데이터
+  const sortedData = React.useMemo(() => {
+    if (!sortField) return data;
+    
+    return [...data].sort((a, b) => {
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+      
+      // null/undefined 처리
+      if (aValue == null) return 1;
+      if (bValue == null) return -1;
+      
+      // 숫자 비교
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      
+      // 문자열 비교
+      const aStr = String(aValue).toLowerCase();
+      const bStr = String(bValue).toLowerCase();
+      
+      if (sortDirection === 'asc') {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+  }, [data, sortField, sortDirection]);
 
   const toggleClusterExpansion = (clusterName: string) => {
     setExpandedClusters(prev => {
@@ -281,11 +331,12 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
           </div>
 
           <button 
-            onClick={loadData}
-            className="p-1.5 text-gray-500 hover:text-nutanix-blue border border-gray-300 rounded-lg hover:bg-gray-50"
-            title="Refresh Data"
+            onClick={() => loadData(true)}
+            className="flex items-center gap-1 px-2 py-1.5 text-gray-500 hover:text-nutanix-blue border border-gray-300 rounded-lg hover:bg-gray-50"
+            title="API Recall (Ignore Cache)"
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            <span className="text-xs font-medium">API Recall</span>
           </button>
           
           <button 
@@ -365,7 +416,7 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
       {category === 'Resources' && (
         <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h4 className="text-sm font-semibold text-gray-700 mb-3">Resource Analysis Parameters</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">CPU Ratio</label>
               <select
@@ -388,6 +439,28 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
                 <option value={2}>RF2</option>
                 <option value={3}>RF3</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">CVM vCore</label>
+              <input
+                type="number"
+                value={cvmVcore}
+                onChange={(e) => setCvmVcore(Number(e.target.value))}
+                min="0"
+                className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-nutanix-blue focus:border-nutanix-blue bg-white"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">CVM Memory (GiB)</label>
+              <input
+                type="number"
+                value={cvmMemory}
+                onChange={(e) => setCvmMemory(Number(e.target.value))}
+                min="0"
+                className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-nutanix-blue focus:border-nutanix-blue bg-white"
+                placeholder="0"
+              />
             </div>
             <div className="flex items-end">
               <button
@@ -493,12 +566,22 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
               <tr>
                 {selectedFields.map(fieldKey => {
                   const def = availableFields.find(f => f.key === fieldKey);
+                  const isSorted = sortField === fieldKey;
                   return (
                     <th 
                       key={fieldKey}
-                      className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                      className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort(fieldKey)}
+                      title="클릭하여 정렬"
                     >
-                      {def?.label || fieldKey}
+                      <div className="flex items-center gap-1">
+                        <span>{def?.label || fieldKey}</span>
+                        {isSorted && (
+                          <span className="text-nutanix-blue">
+                            {sortDirection === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
                     </th>
                   );
                 })}
@@ -514,14 +597,14 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
                   </div>
                 </td>
               </tr>
-            ) : data.length === 0 ? (
+            ) : sortedData.length === 0 ? (
               <tr>
                  <td colSpan={selectedFields.length} className="px-3 py-8 text-center text-gray-500 text-sm">
                     No data available or filters too restrictive.
                  </td>
               </tr>
             ) : (
-              data.map((row, idx) => {
+              sortedData.map((row, idx) => {
                 // Performance 카테고리에서 클러스터 행과 호스트 행을 구분
                 const isClusterRow = category === 'Performance' && row.entityType === 'cluster';
                 const isHostRow = category === 'Performance' && row.entityType === 'host';

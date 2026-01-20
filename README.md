@@ -1,20 +1,21 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Explanation
+Currently, only Prism Element API v2.0 is supported.
 
-# Run and deploy your AI Studio app
+- Prism Central API is under development.
+- API v4.0 is scheduled for update.
 
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/drive/1QMhUnG1dk-aOesqEGAv8AESvx8dIOSNz
+1. Connect to a PE Cluster.
+2. You can view information about VMs, Hardware, Performance, and Resources.
+3. You can export the information to an Excel file.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:**  Node.js , python
 
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Run the backend:
+   `python backend.py`
 3. Run the app:
    `npm run dev`

@@ -43,6 +43,9 @@ export const fetchData = async (
     aggregationType?: string;
     ratio?: number;
     rf?: number;
+    cvmVcore?: number;
+    cvmMemory?: number;
+    ignoreCache?: boolean;
   }
 ): Promise<DataRow[]> => {
   try {
@@ -56,10 +59,17 @@ export const fetchData = async (
       if (performanceParams.aggregationType) params.append('aggregationType', performanceParams.aggregationType);
     }
     
-    // Resources 카테고리일 때 ratio, rf 파라미터 추가
+    // Resources 카테고리일 때 ratio, rf, cvmVcore, cvmMemory 파라미터 추가
     if (category === 'Resources' && performanceParams) {
       if (performanceParams.ratio) params.append('ratio', performanceParams.ratio.toString());
       if (performanceParams.rf) params.append('rf', performanceParams.rf.toString());
+      if (performanceParams.cvmVcore !== undefined) params.append('cvmVcore', performanceParams.cvmVcore.toString());
+      if (performanceParams.cvmMemory !== undefined) params.append('cvmMemory', performanceParams.cvmMemory.toString());
+    }
+    
+    // ignoreCache 파라미터 추가
+    if (performanceParams?.ignoreCache) {
+      params.append('ignoreCache', 'true');
     }
     
     const response = await fetch(`${BACKEND_URL}/api/fetch-data?${params.toString()}`, {

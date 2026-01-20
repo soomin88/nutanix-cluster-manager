@@ -1,0 +1,2 @@
+1. python-3.14.2-amd64.exe
+2. pip install --no-index --find-links=offline-packages -r requirements.txt

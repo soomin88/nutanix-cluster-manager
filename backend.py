@@ -48,7 +48,9 @@ def generate_cache_key(cluster_id: str, category: str, **params) -> str:
             cluster_id,
             category,
             str(params.get('ratio', '')),
-            str(params.get('rf', ''))
+            str(params.get('rf', '')),
+            str(params.get('cvmVcore', '')),
+            str(params.get('cvmMemory', ''))
         ]
     else:
         key_parts = [cluster_id, category]
@@ -224,7 +226,10 @@ async def fetch_data(
     interval: Optional[int] = 30,
     aggregationType: Optional[str] = "average",
     ratio: Optional[int] = 3,
-    rf: Optional[int] = 2
+    rf: Optional[int] = 2,
+    cvmVcore: Optional[int] = 0,
+    cvmMemory: Optional[int] = 0,
+    ignoreCache: Optional[bool] = False
 ) -> List[Dict[str, Any]]:
     """데이터 조회 (캐싱 적용)"""
     
@@ -237,13 +242,18 @@ async def fetch_data(
         interval=interval,
         aggregationType=aggregationType,
         ratio=ratio,
-        rf=rf
+        rf=rf,
+        cvmVcore=cvmVcore,
+        cvmMemory=cvmMemory
     )
     
-    # 캐시 확인
-    cached_data = get_cached_data(cache_key)
-    if cached_data is not None:
-        return cached_data
+    # 캐시 확인 (ignoreCache가 False일 때만)
+    if not ignoreCache:
+        cached_data = get_cached_data(cache_key)
+        if cached_data is not None:
+            return cached_data
+    else:
+        print(f"[CACHE IGNORED] Forcing API call for key: {cache_key}")
     
     # 캐시 미스 - API 호출하여 데이터 가져오기
     result = []
@@ -251,6 +261,21 @@ async def fetch_data(
     if category == "VM":
         # 클러스터 이름 가져오기
         cluster_name = get_cluster_name(cluster)
+
+        # 호스트 정보를 먼저 가져와서 host_uuid -> host_name 매핑 생성
+        host_name_map = {}
+        try:
+            host_url = get_api_url(cluster.ip, '/hosts')
+            host_data = nutanix_fetch(host_url, cluster)
+            host_entities = host_data.get("entities", [])
+            for host in host_entities:
+                host_uuid = host.get("uuid", "")
+                host_name = host.get("name", "Unknown")
+                if host_uuid:
+                    host_name_map[host_uuid] = host_name
+            print(f"[DEBUG] Loaded {len(host_name_map)} hosts: {host_name_map}")
+        except Exception as e:
+            print(f"[ERROR] Failed to load host names: {e}")
 
         # VM 목록 가져오기 - include_vm_nic_config=true, include_vm_disk_config=true로 NIC 및 디스크 상세정보 포함
         url = get_api_url(cluster.ip, '/vms?include_cvm=true&include_vm_nic_config=true&include_vm_disk_config=true')
@@ -262,6 +287,7 @@ async def fetch_data(
             vm_uuid = vm.get("uuid", "")
             vm_name = vm.get("vmName", "") or vm.get("name", "")
             vm_power_state = vm.get("power_state", "UNKNOWN")
+            host_uuid = vm.get("host_uuid", "")
             vm_nics = vm.get("vm_nics", [])
             
             # NIC 정보 처리 - MAC과 IP를 분리해서 표시
@@ -296,19 +322,28 @@ async def fetch_data(
             
             vdisk_str = "\n".join(disk_list) if disk_list else ""
             
+            # vCore 계산: num_vcpus * num_cores_per_vcpu
             num_vcpus = vm.get("num_vcpus", 0)
+            num_cores_per_vcpu = vm.get("num_cores_per_vcpu", 1)
+            total_vcores = num_vcpus * num_cores_per_vcpu
             memory_mb = vm.get("memory_mb", 0)
+            # MB를 GiB로 변환
+            memory_gib = int(memory_mb / 1024) if memory_mb else 0
+            
+            # 호스트 이름 매핑에서 가져오기
+            host_name = host_name_map.get(host_uuid, "N/A")
 
             result.append({
                 "clusterName": cluster_name,
+                "hostName": host_name,
                 "name": vm_name,
                 "uuid": vm_uuid,
                 "powerState": vm_power_state,
                 "macAddress": mac_str,
                 "ipAddresses": ip_str,
                 "vDisk": vdisk_str,
-                "numVcpus": num_vcpus,
-                "memoryMb": memory_mb,
+                "numVcpus": total_vcores,
+                "memoryGib": memory_gib,
             })
 
         # 캐시 저장
@@ -613,11 +648,17 @@ async def fetch_data(
             numa_over_cpu = 0
             use_vcores = 0
             for vm in powered_on_vms:
-                vcpus = vm.get("num_vcpus", 0)
+                # vCore = num_vcpus * num_cores_per_vcpu
+                num_vcpus = vm.get("num_vcpus", 0)
+                num_cores_per_vcpu = vm.get("num_cores_per_vcpu", 1)
+                vcpus = num_vcpus * num_cores_per_vcpu
                 use_vcores += vcpus
                 # NUMA over: vCore > pCore/2
                 if vcpus > (num_cores / 2):
                     numa_over_cpu += 1
+            
+            # CVM vCore 추가
+            use_vcores += cvmVcore if cvmVcore else 0
             
             recommend_vcore_ratio = f"1:{ratio}"
             current_vcore_ratio = f"1:{use_vcores / num_cores:.1f}" if num_cores > 0 else "1:0.0"
@@ -647,6 +688,9 @@ async def fetch_data(
                 # NUMA over: Memory > 물리서버 Memory/2
                 if memory_gib > (memory_capacity_gib / 2):
                     numa_over_memory += 1
+            
+            # CVM Memory 추가
+            use_memory_gib += cvmMemory if cvmMemory else 0
             
             memory_rows.append({
                 "table": "Memory",
