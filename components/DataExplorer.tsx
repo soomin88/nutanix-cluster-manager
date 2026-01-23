@@ -28,9 +28,15 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
   const [cvmVcore, setCvmVcore] = useState<number>(0);
   const [cvmMemory, setCvmMemory] = useState<number>(0);
   
-  // 정렬 상태
+  // 정렬 상태 (일반 테이블용)
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Resources CPU/Memory 별도 정렬 상태
+  const [sortFieldCpu, setSortFieldCpu] = useState<string | null>(null);
+  const [sortDirectionCpu, setSortDirectionCpu] = useState<'asc' | 'desc'>('asc');
+  const [sortFieldMemory, setSortFieldMemory] = useState<string | null>(null);
+  const [sortDirectionMemory, setSortDirectionMemory] = useState<'asc' | 'desc'>('asc');
 
   // Reset selection when category changes
   useEffect(() => {
@@ -107,7 +113,7 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
     );
   };
   
-  // 정렬 핸들러
+  // 정렬 핸들러 (일반 테이블용)
   const handleSort = (field: string) => {
     if (sortField === field) {
       // 같은 필드를 클릭하면 방향 전환
@@ -119,11 +125,36 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
     }
   };
   
-  // 정렬된 데이터
+  // CPU 테이블 정렬 핸들러
+  const handleSortCpu = (field: string) => {
+    if (sortFieldCpu === field) {
+      setSortDirectionCpu(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortFieldCpu(field);
+      setSortDirectionCpu('asc');
+    }
+  };
+  
+  // Memory 테이블 정렬 핸들러
+  const handleSortMemory = (field: string) => {
+    if (sortFieldMemory === field) {
+      setSortDirectionMemory(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortFieldMemory(field);
+      setSortDirectionMemory('asc');
+    }
+  };
+  
+  // 정렬된 데이터 (일반 테이블용)
   const sortedData = React.useMemo(() => {
     if (!sortField) return data;
     
-    return [...data].sort((a, b) => {
+    // Total 행 분리 (Resources 테이블용)
+    const totalRows = data.filter(row => row.hostName === 'Total');
+    const nonTotalRows = data.filter(row => row.hostName !== 'Total');
+    
+    // Total이 아닌 행들만 정렬
+    const sorted = [...nonTotalRows].sort((a, b) => {
       const aValue = a[sortField];
       const bValue = b[sortField];
       
@@ -146,7 +177,78 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
         return bStr.localeCompare(aStr);
       }
     });
+    
+    // Total 행을 맨 아래에 추가
+    return [...sorted, ...totalRows];
   }, [data, sortField, sortDirection]);
+  
+  // CPU 테이블 정렬된 데이터
+  const sortedDataCpu = React.useMemo(() => {
+    const cpuData = data.filter(row => row.table === 'CPU');
+    if (!sortFieldCpu) return cpuData;
+    
+    // Total 행 분리
+    const totalRows = cpuData.filter(row => row.hostName === 'Total');
+    const nonTotalRows = cpuData.filter(row => row.hostName !== 'Total');
+    
+    // Total이 아닌 행들만 정렬
+    const sorted = [...nonTotalRows].sort((a, b) => {
+      const aValue = a[sortFieldCpu];
+      const bValue = b[sortFieldCpu];
+      
+      if (aValue == null) return 1;
+      if (bValue == null) return -1;
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirectionCpu === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      
+      const aStr = String(aValue).toLowerCase();
+      const bStr = String(bValue).toLowerCase();
+      
+      if (sortDirectionCpu === 'asc') {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+    
+    return [...sorted, ...totalRows];
+  }, [data, sortFieldCpu, sortDirectionCpu]);
+  
+  // Memory 테이블 정렬된 데이터
+  const sortedDataMemory = React.useMemo(() => {
+    const memoryData = data.filter(row => row.table === 'Memory');
+    if (!sortFieldMemory) return memoryData;
+    
+    // Total 행 분리
+    const totalRows = memoryData.filter(row => row.hostName === 'Total');
+    const nonTotalRows = memoryData.filter(row => row.hostName !== 'Total');
+    
+    // Total이 아닌 행들만 정렬
+    const sorted = [...nonTotalRows].sort((a, b) => {
+      const aValue = a[sortFieldMemory];
+      const bValue = b[sortFieldMemory];
+      
+      if (aValue == null) return 1;
+      if (bValue == null) return -1;
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirectionMemory === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      
+      const aStr = String(aValue).toLowerCase();
+      const bStr = String(bValue).toLowerCase();
+      
+      if (sortDirectionMemory === 'asc') {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+    
+    return [...sorted, ...totalRows];
+  }, [data, sortFieldMemory, sortDirectionMemory]);
 
   const toggleClusterExpansion = (clusterName: string) => {
     setExpandedClusters(prev => {
@@ -489,18 +591,34 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Host name</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">VM Count</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">NUMA over</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">pCore</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Use vCore</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Recommend vcore Ratio</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Current vcore Ratio</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Result</th>
+                    <th onClick={() => handleSortCpu('hostName')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Host name {sortFieldCpu === 'hostName' && <span className="text-blue-600">{sortDirectionCpu === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortCpu('vmCount')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      VM Count {sortFieldCpu === 'vmCount' && <span className="text-blue-600">{sortDirectionCpu === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortCpu('numaOver')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      NUMA over {sortFieldCpu === 'numaOver' && <span className="text-blue-600">{sortDirectionCpu === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortCpu('pCore')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      pCore {sortFieldCpu === 'pCore' && <span className="text-blue-600">{sortDirectionCpu === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortCpu('useVCore')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Use vCore {sortFieldCpu === 'useVCore' && <span className="text-blue-600">{sortDirectionCpu === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortCpu('recommendVcoreRatio')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Recommend vcore Ratio {sortFieldCpu === 'recommendVcoreRatio' && <span className="text-blue-600">{sortDirectionCpu === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortCpu('currentVcoreRatio')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Current vcore Ratio {sortFieldCpu === 'currentVcoreRatio' && <span className="text-blue-600">{sortDirectionCpu === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortCpu('result')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Result {sortFieldCpu === 'result' && <span className="text-blue-600">{sortDirectionCpu === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {data.filter(row => row.table === 'CPU').map((row, idx) => (
+                  {sortedDataCpu.map((row, idx) => (
                     <tr key={idx} className={row.hostName === 'Total' ? 'bg-blue-50 font-semibold' : ''}>
                       <td className="px-3 py-2 text-sm text-gray-900 text-center">{row.hostName}</td>
                       <td className="px-3 py-2 text-sm text-gray-900 text-center">{row.vmCount}</td>
@@ -528,18 +646,34 @@ const DataExplorer: React.FC<DataExplorerProps> = ({ cluster }) => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Host name</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">VM Count</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">NUMA over</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Memory(GiB)</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Use Memory(GiB) =(A)</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Recommend Use =(B)</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Available memory (B-A)</th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Result</th>
+                    <th onClick={() => handleSortMemory('hostName')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Host name {sortFieldMemory === 'hostName' && <span className="text-blue-600">{sortDirectionMemory === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortMemory('vmCount')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      VM Count {sortFieldMemory === 'vmCount' && <span className="text-blue-600">{sortDirectionMemory === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortMemory('numaOver')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      NUMA over {sortFieldMemory === 'numaOver' && <span className="text-blue-600">{sortDirectionMemory === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortMemory('memoryGiB')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Memory(GiB) {sortFieldMemory === 'memoryGiB' && <span className="text-blue-600">{sortDirectionMemory === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortMemory('useMemoryGiB')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Use Memory(GiB) =(A) {sortFieldMemory === 'useMemoryGiB' && <span className="text-blue-600">{sortDirectionMemory === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortMemory('recommendUse')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Recommend Use =(B) {sortFieldMemory === 'recommendUse' && <span className="text-blue-600">{sortDirectionMemory === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortMemory('availableMemory')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Available memory (B-A) {sortFieldMemory === 'availableMemory' && <span className="text-blue-600">{sortDirectionMemory === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
+                    <th onClick={() => handleSortMemory('result')} className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                      Result {sortFieldMemory === 'result' && <span className="text-blue-600">{sortDirectionMemory === 'asc' ? '↑' : '↓'}</span>}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {data.filter(row => row.table === 'Memory').map((row, idx) => (
+                  {sortedDataMemory.map((row, idx) => (
                     <tr key={idx} className={row.hostName === 'Total' ? 'bg-blue-50 font-semibold' : ''}>
                       <td className="px-3 py-2 text-sm text-gray-900 text-center">{row.hostName}</td>
                       <td className="px-3 py-2 text-sm text-gray-900 text-center">{row.vmCount}</td>
